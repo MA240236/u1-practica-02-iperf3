@@ -1,0 +1,15 @@
+# Estado local de Vagrant (incluye identificadores y claves de las VMs)
+.vagrant/
+
+# Archivos del sistema operativo
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+
+# Archivos temporales y respaldos de editores
+*.swp
+*.swo
+*~
+.#*
+\#*#

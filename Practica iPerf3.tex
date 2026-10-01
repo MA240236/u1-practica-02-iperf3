@@ -1,0 +1,244 @@
+\documentclass[12pt]{article}
+\usepackage[most]{tcolorbox}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage[letterpaper,left=2cm, right=2cm, top=2cm, bottom=2cm]{geometry}
+\graphicspath{{img/}}
+
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\lhead{Instituto Tecnológico de Mérida}
+\rhead{Administración de Redes}
+\lfoot{Ing. Rodrigo de Jesús Ramírez Zapata}
+
+\newtcolorbox{warning}{%
+  breakable,
+  enhanced,
+  colback=yellow!10!white,
+  colframe=yellow!75!black,
+  title={\large Advertencia\hfill%
+    \smash{\raisebox{-11pt}{\includegraphics[width=1cm,height=1cm]{img/warning.png}}}},
+}
+
+\newtcolorbox{note}{%
+  breakable,
+  enhanced,
+  colback=gray!10!white,
+  colframe=gray!75!black,
+  title={\large Nota\hfill%
+    \smash{\raisebox{-8pt}{\includegraphics[width=1cm,height=1cm]{img/advice.png}}}},
+}
+
+
+
+
+\begin{document}
+
+\begin{center}
+{\LARGE Práctica 1.4 --- Medición de Ancho de Banda con iPerf3 usando Vagrant}
+\end{center}
+
+\noindent\textbf{Asignatura:} Administración de Redes (SCA-1002) \\
+\textbf{Grupo:} SCA1002\_8SB \quad \textbf{Periodo:} AGO--DIC 2026 \\
+\textbf{Unidad:} 1 --- Funciones de la Administración de Redes \\
+\textbf{Subtema:} 1.4 Desempeño (FCAPS: \emph{Performance Management}) \\
+\textbf{Sesión:} Martes / Jueves 19:00 -- 21:00 hrs \\
+\textbf{Plataforma:} Windows 10/11 + Vagrant + VirtualBox (2 VMs Ubuntu 22.04)
+
+\section{Objetivo}
+
+Levantar dos máquinas virtuales Linux con \textbf{Vagrant} sobre Windows, conectadas en una red privada, para medir el desempeño de red mediante \textbf{iPerf3}, identificando métricas de ancho de banda, jitter y pérdida de paquetes sin depender del sistema operativo del host.
+
+\section{Competencia a desarrollar}
+
+\begin{quote}
+Configura y administra servicios de red para el uso eficiente y confiable de la infraestructura tecnológica de la organización.
+\end{quote}
+
+Al finalizar la práctica el alumno será capaz de:
+
+\begin{itemize}
+	\item Instalar y configurar Vagrant y VirtualBox en Windows.
+	\item Definir un entorno multi-máquina con un \texttt{Vagrantfile}.
+	\item Provisionar automáticamente iPerf3 en ambas VMs mediante shell scripts.
+	\item Ejecutar pruebas TCP y UDP entre dos VMs en red privada.
+	\item Interpretar métricas de throughput, jitter y packet loss.
+\end{itemize}
+
+\section{Materiales y requisitos}
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Recurso} & \textbf{Descripción} \\
+\hline
+PC con Windows 10/11 & 64-bit, mínimo 8 GB RAM, 20 GB libres en disco \\
+\hline
+VirtualBox 7.x & Proveedor de virtualización \\
+\hline
+Vagrant 2.4.9 & Gestor de entornos virtuales (HashiCorp) \\
+\hline
+Acceso a internet & Para descargar el box de Ubuntu \\
+\hline
+PowerShell o cmd & Como Administrador \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{warning}
+Verifica en BIOS/UEFI que la virtualización esté habilitada (\texttt{Intel VT-x} o \texttt{AMD-V}). Sin esto, VirtualBox no puede crear VMs de 64 bits.
+\end{warning}
+
+\begin{warning}
+Si tienes \textbf{Hyper-V} habilitado (WSL2, Docker Desktop), puede entrar en conflicto con VirtualBox. Se recomienda desactivarlo temporalmente o usar el proveedor Hyper-V de Vagrant en su lugar.
+\end{warning}
+
+\section{Topología}
+
+\begin{verbatim}
+                        Windows 10/11 (Host)
+
+    VM: servidor                            VM: cliente
+    Ubuntu 22.04                            Ubuntu 22.04
+
+    iperf3 -s          <---- TCP/UDP ---->  iperf3 -c
+    192.168.56.10                           192.168.56.11
+
+           Red privada: 192.168.56.0/24 (VirtualBox host-only)
+                       Puerto iPerf3: 5201
+\end{verbatim}
+
+\subsection{Paso 1 --- Instalar VirtualBox}
+
+\begin{enumerate}
+	\item Descargar VirtualBox desde la página oficial: \texttt{https://www.virtualbox.org/wiki/Downloads} (seleccionar \textbf{Windows hosts}).
+	\item Ejecutar el instalador \texttt{.exe} descargado con doble clic.
+	\item Aceptar las opciones por defecto y completar la instalación.
+	\item Verificar la instalación abriendo \texttt{cmd} y ejecutando: \texttt{"C:\textbackslash Program Files\textbackslash Oracle\textbackslash VirtualBox\textbackslash VBoxManage.exe" --version}
+\end{enumerate}
+
+Salida esperada: \texttt{7.x.x}
+
+\subsection{Paso 2 --- Instalar Vagrant}
+
+\begin{enumerate}
+	\item Descargar el instalador \texttt{.msi} oficial desde HashiCorp: \texttt{https://releases.hashicorp.com/vagrant/2.4.9/vagrant\_2.4.9\_windows\_amd64.msi}
+	\item Ejecutar el instalador con las opciones por defecto.
+	\item Reiniciar el equipo al terminar --- Vagrant agrega su ruta al PATH del sistema y requiere reinicio para que tome efecto.
+	\item Verificar en un \texttt{cmd} o PowerShell nuevo: \texttt{vagrant --version}
+\end{enumerate}
+
+Salida esperada: \texttt{Vagrant 2.4.9}
+
+\subsection{Paso 3 --- Crear la carpeta del proyecto}
+
+\begin{center}
+\texttt{mkdir C:\textbackslash vagrant-iperf} \\
+\texttt{cd C:\textbackslash vagrant-iperf}
+\end{center}
+
+\begin{note}
+Todos los archivos de esta práctica viven dentro de \texttt{C:\textbackslash vagrant-iperf\textbackslash}. El archivo de referencia está en \texttt{./Vagrantfile}, en la raíz del repositorio clonado; cópialo a \texttt{C:\textbackslash vagrant-iperf\textbackslash Vagrantfile}. Edita ese archivo en Windows y ejecuta Vagrant desde \texttt{C:\textbackslash vagrant-iperf}. Guarda \texttt{RESPUESTAS.md} y las evidencias para entregar en el repositorio clonado.
+\end{note}
+
+\subsection{Paso 4 --- Revisar el Vagrantfile}
+
+Dentro de \texttt{C:\textbackslash vagrant-iperf\textbackslash}, copiar el \texttt{Vagrantfile} de esta práctica. Define dos VMs (\texttt{servidor} y \texttt{cliente}) en la red privada \texttt{192.168.56.0/24}, cada una con \texttt{iperf3} instalado automáticamente vía \emph{shell provisioner}.
+
+\begin{note}
+¿Por qué \texttt{192.168.56.x}? VirtualBox reserva por omisión el rango \texttt{192.168.56.0/21} para redes host-only. Usar IPs fuera de ese rango produce el error \texttt{The IP address configured for the host-only network is not within the allowed ranges}.
+\end{note}
+
+\begin{note}
+El \texttt{Vagrantfile} usa la box \texttt{bento/ubuntu-22.04} en vez de la oficial \texttt{ubuntu/jammy64}. Esta última solo publica el provider VirtualBox para arquitectura \texttt{amd64} (Intel/AMD); en un Mac con Apple Silicon (M1/M2/M3) \texttt{vagrant up} fallaría con \texttt{VBOX\_E\_PLATFORM\_ARCH\_NOT\_SUPPORTED}. \texttt{bento/ubuntu-22.04} publica también \texttt{arm64}, así que el mismo \texttt{Vagrantfile} funciona igual en Windows, Mac Intel y Mac Apple Silicon.
+\end{note}
+
+\subsection{Paso 5 --- Levantar las máquinas virtuales}
+
+\begin{center}
+\texttt{vagrant up}
+\end{center}
+
+Vagrant realiza automáticamente: descarga del box \texttt{bento/ubuntu-22.04}, creación de las dos VMs, configuración de red, e instalación de iPerf3 en ambas.
+
+Verificar el estado con \texttt{vagrant status}; ambas VMs deben aparecer como \texttt{running}.
+
+\subsection{Procedimiento de pruebas}
+
+\paragraph{Paso 6 --- Conectarse a las VMs.} Abrir dos ventanas de \texttt{cmd}/PowerShell: \texttt{vagrant ssh servidor} y \texttt{vagrant ssh cliente}. Verificar conectividad con \texttt{ping -c 4 192.168.56.10} desde el cliente.
+
+\paragraph{Paso 7 --- Prueba básica TCP.} En el servidor: \texttt{iperf3 -s}. En el cliente: \texttt{iperf3 -c 192.168.56.10}.
+
+\begin{note}
+El throughput alto es normal: ambas VMs comparten el mismo host físico y la red es virtual, no hay cable real de por medio.
+\end{note}
+
+\paragraph{Paso 8 --- Prueba TCP con flujos paralelos.} \texttt{iperf3 -c 192.168.56.10 -P 4}. Observar la línea \texttt{[SUM]}.
+
+\paragraph{Paso 9 --- Prueba UDP: jitter y packet loss.} \texttt{iperf3 -c 192.168.56.10 -u -b 1G -t 30}.
+
+\paragraph{Paso 10 --- Prueba en sentido inverso (download).} \texttt{iperf3 -c 192.168.56.10 -R}.
+
+\paragraph{Paso 11 --- Prueba continua con reporte cada 5 segundos.} \texttt{iperf3 -c 192.168.56.10 -t 60 -i 5}.
+
+\paragraph{Paso 12 --- Guardar resultados en archivo.}
+
+\begin{verbatim}
+iperf3 -c 192.168.56.10 -t 30 > /tmp/resultado_tcp.txt
+iperf3 -c 192.168.56.10 -u -b 1G -t 30 > /tmp/resultado_udp.txt
+\end{verbatim}
+
+Copiar al host con \texttt{vagrant scp cliente:/tmp/resultado\_tcp.txt C:\textbackslash vagrant-iperf\textbackslash resultado\_tcp.txt} (requiere \texttt{vagrant plugin install vagrant-scp}).
+
+\subsection{Paso 13 --- Apagar y destruir las VMs}
+
+\texttt{vagrant halt} (apaga, conserva discos) o \texttt{vagrant destroy -f} (elimina todo).
+
+\section{Solución de problemas comunes}
+
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Error} & \textbf{Causa} & \textbf{Solución} \\
+\hline
+VT-x/AMD-V no disponible & Virtualización deshabilitada en BIOS & Habilitar Intel VT-x / AMD-V \\
+\hline
+IP fuera de rango & IP fuera del rango de VirtualBox & Usar \texttt{192.168.56.x} \\
+\hline
+\texttt{vagrant} no reconocido & No está en el PATH & Reiniciar Windows tras instalar \\
+\hline
+Box no encontrado & Sin acceso a internet & Verificar conexión, reintentar \\
+\hline
+\texttt{VBOX\_E\_PLATFORM\_ARCH\_NOT\_SUPPORTED} & Box de arquitectura equivocada para el host (VM amd64 en Mac Apple Silicon) & Confirmar que el Vagrantfile usa \texttt{bento/ubuntu-22.04}, no \texttt{ubuntu/jammy64} \\
+\hline
+Timeout en \texttt{vagrant ssh} & VM no terminó de iniciar & Esperar y reintentar \\
+\hline
+\texttt{iperf3: unable to connect} & Servidor no iniciado & Ejecutar \texttt{iperf3 -s} primero \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Preguntas complementarias}
+
+\begin{itemize}
+	\item ¿Por qué los valores de throughput obtenidos entre dos VMs en el mismo host son mucho más altos que los que se obtendrían entre dos equipos físicos en una LAN? ¿Qué parte de la infraestructura de red queda fuera de esta prueba?
+	\item ¿Cuál es la ventaja de usar Vagrant y un \texttt{Vagrantfile} para esta práctica en lugar de crear las VMs manualmente en VirtualBox? ¿Qué concepto de administración de TI representa esto?
+	\item El \texttt{Vagrantfile} usa \texttt{private\_network} con IPs estáticas. ¿Qué pasaría si usara \texttt{type: "dhcp"} en lugar de IP estática?
+	\item Comparando los resultados de la prueba UDP con los valores SLA de referencia (jitter < 30 ms, packet loss < 1\%), ¿tu red virtual los cumple?
+	\item ¿En qué escenarios de la vida real sería útil el enfoque de esta práctica para un administrador de redes? Da al menos dos ejemplos concretos.
+\end{itemize}
+
+\section{Reporte a entregar}
+
+Portada, contenido del \texttt{Vagrantfile}, capturas de \texttt{vagrant status} y de cada prueba, archivos \texttt{.txt} exportados, tabla de resultados consolidada, respuestas a las preguntas complementarias y conclusiones (mínimo 10 líneas). \textbf{Formato:} PDF. \textbf{Entrega:} plataforma del curso, siguiente sesión.
+
+
+\section{Entrega en GitHub Classroom}
+
+\begin{note}
+Crea un archivo llamado exactamente \texttt{RESPUESTAS.md} en la raíz de tu repositorio de GitHub Classroom (junto a \texttt{README.md}, en tu equipo anfitrión). Escribe al inicio tu \textbf{nombre completo} y \textbf{correo electrónico}. Incluye las respuestas a todas las preguntas complementarias, conservando su orden y copiando cada pregunta antes de su respuesta.
+
+Agrega \texttt{RESPUESTAS.md} a tu commit y súbelo a GitHub. Conserva también las capturas, resultados y el reporte PDF cuando la práctica los solicite. El \texttt{.gitignore} excluye \texttt{.vagrant/} y archivos temporales; entrega el \texttt{Vagrantfile} y las configuraciones que correspondan, junto con tus evidencias.
+\end{note}
+
+\end{document}
